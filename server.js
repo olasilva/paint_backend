@@ -29,7 +29,8 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { poli
 app.use(cors({ origin: process.env.CLIENT_ORIGIN ? process.env.CLIENT_ORIGIN.split(',') : true }));
 app.use(express.json({ limit: '200kb' }));
 
-const uploadDir = path.join(__dirname, 'uploads');
+const uploadDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
+fs.mkdirSync(uploadDir, { recursive: true });
 app.use('/uploads', express.static(uploadDir, { maxAge: '7d' }));
 
 // ---------- helpers ----------
@@ -189,4 +190,8 @@ app.use((err, _req, res, _next) => {
   if (status === 500) console.error(err);
 });
 
-app.listen(PORT, () => console.log(`Legend Paints API on http://localhost:${PORT}`));
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => console.log(`Legend Paints API on http://localhost:${PORT}`));
+}
+
+export default app;
