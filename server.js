@@ -116,9 +116,17 @@ app.post('/api/quotes', quoteLimiter, (req, res) => {
   if (!q.name || !q.phone || !q.details) return res.status(400).json({ error: 'Name, phone number and project details are required.' });
   if (!/^[+\d][\d\s-]{6,19}$/.test(q.phone)) return res.status(400).json({ error: 'Enter a valid phone number.' });
   for (const k of Object.keys(q)) q[k] = String(q[k]).slice(0, k === 'details' ? 2000 : 200);
-  const item = { id: crypto.randomUUID(), ...q, status: 'new', createdAt: new Date().toISOString() };
+  const item = {
+    id: crypto.randomUUID(),
+    ...q,
+    status: 'new',
+    reply: '',
+    replyChannel: '',
+    repliedAt: null,
+    createdAt: new Date().toISOString(),
+  };
   db.quotes.push(item); save();
-  res.status(201).json({ ok: true });
+  res.status(201).json({ ok: true, quote: item });
 });
 const quotes = express.Router();
 quotes.use(auth);
@@ -128,6 +136,22 @@ quotes.put('/:id', (req, res) => {
   if (!q) return res.status(404).json({ error: 'Not found' });
   if (!['new', 'contacted', 'won', 'closed'].includes(req.body.status)) return res.status(400).json({ error: 'Invalid status' });
   q.status = req.body.status; save(); res.json(q);
+});
+quotes.post('/:id/reply', (req, res) => {
+  const q = db.quotes.find((x) => x.id === req.params.id);
+  if (!q) return res.status(404).json({ error: 'Not found' });
+  const reply = typeof req.body.reply === 'string' ? req.body.reply.trim() : '';
+  const replyChannel = typeof req.body.replyChannel === 'string' ? req.body.replyChannel.trim() : '';
+  if (!reply) return res.status(400).json({ error: 'Reply message is required.' });
+  if (!['email', 'whatsapp', 'phone', ''].includes(replyChannel)) {
+    return res.status(400).json({ error: 'Invalid reply channel.' });
+  }
+  q.reply = reply.slice(0, 4000);
+  q.replyChannel = replyChannel;
+  q.repliedAt = new Date().toISOString();
+  if (q.status === 'new') q.status = 'contacted';
+  save();
+  res.json(q);
 });
 quotes.delete('/:id', (req, res) => {
   db.quotes = db.quotes.filter((x) => x.id !== req.params.id); save(); res.json({ ok: true });
