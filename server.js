@@ -14,13 +14,9 @@ import { load, save } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 4000;
-const SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@legendpaints.ng').toLowerCase();
-const ADMIN_HASH = bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'ChangeMe123!', 10);
-if (process.env.NODE_ENV === 'production' && (SECRET === 'dev-secret-change-me' || !process.env.ADMIN_PASSWORD)) {
-  console.error('Set JWT_SECRET and ADMIN_PASSWORD before running in production.');
-  process.exit(1);
-}
+const ADMIN_HASH = process.env.ADMIN_PASSWORD ? bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10) : null;
 
 const db = load();
 const app = express();
@@ -28,6 +24,7 @@ app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const allowedOrigins = new Set([
   'https://forntendd-paint.vercel.app',
+  'https://legendpaint.vercel.app',
   ...(process.env.CLIENT_ORIGIN || '')
     .split(',')
     .map((origin) => origin.trim())
@@ -94,6 +91,7 @@ function resource(name, { fields, required = [], publicFilter, prepare }) {
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many attempts. Try again in 15 minutes.' } });
 app.post('/api/auth/login', loginLimiter, (req, res) => {
   const { email = '', password = '' } = req.body || {};
+  if (!ADMIN_HASH) return res.status(503).json({ error: 'Admin authentication is not configured.' });
   const ok = email.trim().toLowerCase() === ADMIN_EMAIL && bcrypt.compareSync(password, ADMIN_HASH);
   if (!ok) return res.status(401).json({ error: 'Email or password is incorrect.' });
   res.json({ token: jwt.sign({ role: 'admin' }, SECRET, { expiresIn: '12h' }) });
